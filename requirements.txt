@@ -1,0 +1,5 @@
+selenium
+beautifulsoup4
+python-telegram-bot
+supabase
+undetected-chromedriver
