@@ -1,23 +1,19 @@
 # scraping.py
 import undetected_chromedriver as uc
-from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 import time
 import logging
 import random
 from urllib.parse import quote 
 
-# --- CONFIG CHROME ---
 def get_driver():
     options = uc.ChromeOptions()
-    # options.add_argument('--headless=new') # DESCOMENTAR PARA RODAR NA NUVEM
+    # options.add_argument('--headless=new') # ATIVAR DEPOIS NO GITHUB
     options.add_argument("--disable-popup-blocking")
     options.add_argument("--start-maximized")
     return uc.Chrome(options=options, use_subprocess=True)
 
-# ---------------------------------------------------------
-# MOTOR 1: INDEED
-# ---------------------------------------------------------
+# --- MOTOR 1: INDEED ---
 def buscar_vagas_indeed(termo_busca: str, local_busca: str = "") -> list:
     if local_busca:
         url = f"https://br.indeed.com/jobs?q={quote(termo_busca)}&l={quote(local_busca)}"
@@ -70,18 +66,16 @@ def buscar_vagas_indeed(termo_busca: str, local_busca: str = "") -> list:
         logging.error(f"Erro Indeed: {e}")
         return []
     finally:
-        if driver: driver.quit()
+        if driver: 
+            try: driver.quit()
+            except: pass
 
-# ---------------------------------------------------------
-# MOTOR 2: QCONCURSOS (PE + Status)
-# ---------------------------------------------------------
+# --- MOTOR 2: QCONCURSOS ---
 def buscar_qconcursos() -> list:
-    # URL MÁGICA:
-    # by_situation: 2 (Autorizado), 3 (Aberto), 4 (Inscrições Abertas)
-    # by_state: 17 (Pernambuco)
+    # URL com filtros: PE (17) + Autorizado (2), Aberto (3), Inscrições Abertas (4)
     url = "https://www.qconcursos.com/concursos/pesquisa?by_situation%5B%5D=2&by_situation%5B%5D=3&by_situation%5B%5D=4&by_state%5B%5D=17"
     
-    print(f"🏛️ [QConcursos] Acessando Editais PE (Abertos/Autorizados)...")
+    print(f"🏛️ [QConcursos] Acessando Editais PE...")
 
     driver = None
     concursos = []
@@ -89,46 +83,42 @@ def buscar_qconcursos() -> list:
     try:
         driver = get_driver()
         driver.get(url)
-        time.sleep(8) # Aguarda carregamento do site
+        time.sleep(10) # Aguarda site carregar
 
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         
-        # O QConcursos usa cards com classes específicas
-        # Vamos tentar pegar o container principal do card
+        # Tenta pegar os cards principais
         cards = soup.find_all('div', class_='q-card-primary')
         
         logging.info(f"QConcursos: {len(cards)} editais encontrados.")
 
         for card in cards:
             try:
-                # Título e Link
+                # Título
                 title_div = card.find('h3', class_='q-card-primary__title')
                 if not title_div: continue
-                
                 link_el = title_div.find('a')
                 titulo = link_el.get_text(strip=True)
-                link_relativo = link_el['href']
-                link = f"https://www.qconcursos.com{link_relativo}"
+                link = f"https://www.qconcursos.com{link_el['href']}"
                 
-                # Status (Aberto, Autorizado...)
+                # Status
                 status_el = card.find('span', class_='q-tag')
                 status = status_el.get_text(strip=True) if status_el else "Info"
 
-                # Info Geral (Salário, Vagas, Escolaridade)
+                # Info Extra
                 info_div = card.find('div', class_='q-card-primary__info')
-                info_texto = info_div.get_text(" | ", strip=True) if info_div else "Ver edital"
+                info_texto = info_div.get_text(" | ", strip=True) if info_div else ""
 
                 concursos.append({
                     'titulo': titulo,
                     'empresa': "Órgão Público",
                     'local': "Pernambuco",
-                    'salario': "Ver Detalhes",
-                    'resumo_q': f"Status: {status} | {info_texto}",
+                    'salario': "Ver Edital",
+                    'resumo_q': f"Status: {status}\nℹ️ {info_texto}",
                     'link': link,
                     'fonte': 'qconcursos'
                 })
-            except Exception as e:
-                pass
+            except: pass
             
         return concursos
 
@@ -136,4 +126,6 @@ def buscar_qconcursos() -> list:
         logging.error(f"Erro QConcursos: {e}")
         return []
     finally:
-        if driver: driver.quit()    
+        if driver: 
+            try: driver.quit()
+            except: pass
